@@ -4,11 +4,11 @@ import pandas as pd
 # --- Load Weights and Thresholds from Excel ---
 excel_file = "LNE CustomerHealthScoringModel.xlsx"
 
-# Load Input sheet
-df = pd.read_excel(excel_file, sheet_name="Input")
+# Load Input sheet without assuming headers
+df = pd.read_excel(excel_file, sheet_name="Input", header=None)
 
-# Debug: show column names from Excel
-st.write("Columns found in Input sheet:", df.columns.tolist())
+# Debug: show first few rows
+st.write("Preview of Input sheet:", df.head(20))
 
 # For now, just use the whole dataframe until we align names
 kpi_settings = df
@@ -108,4 +108,5 @@ if submitted:
 
     st.subheader("Detailed Results")
     st.write(pd.DataFrame(detailed_results))
+
 
