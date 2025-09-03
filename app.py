@@ -17,12 +17,11 @@ df = pd.read_excel(excel_file, sheet_name="Input", header=header_row)
 # Drop duplicate columns
 df = df.loc[:, ~df.columns.duplicated()].copy()
 
-# Keep only important ones
-keep_cols = ["Metric", "Low Risk", "Moderate Risk", "High Risk", "Weight"]
-if "Section" in df.columns:
-    keep_cols.append("Section")
+# Define the important columns
+keep_cols = ["Metric", "Low Risk", "Moderate Risk", "High Risk", "Weight", "Section"]
 
-df = df[keep_cols]
+# Keep only columns that actually exist in the DataFrame
+df = df[[c for c in keep_cols if c in df.columns]]
 
 # Convert thresholds and weights to numeric
 numeric_cols = [c for c in ["Low Risk", "Moderate Risk", "High Risk", "Weight"] if c in df.columns]
@@ -33,7 +32,7 @@ if "Section" not in df.columns:
     df["Section"] = df["Metric"].where(df["Low Risk"].isna()).ffill()
 
 # Keep only rows with valid thresholds + weights
-kpi_settings = df.dropna(subset=["Low Risk", "Moderate Risk", "High Risk", "Weight"])
+kpi_settings = df.dropna(subset=[c for c in ["Low Risk", "Moderate Risk", "High Risk", "Weight"] if c in df.columns])
 
 # --- Streamlit App ---
 st.title("Customer Lifecycle Management Health Score")
