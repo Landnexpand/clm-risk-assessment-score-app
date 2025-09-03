@@ -16,8 +16,11 @@ st.markdown("Enter your actual KPI metrics below to calculate section scores and
 
 user_inputs = {}
 
+# Debug: show what columns are in the Input sheet
+st.write("Columns in Input sheet:", kpi_settings.columns.tolist())
+
 # Group inputs by section
-st.write("Columns in Input sheet:", kpi_settings.columns.tolist()) with st.form("kpi_form"):
+with st.form("kpi_form"):
     for section in kpi_settings['Section'].unique():
         st.subheader(section)
         section_df = kpi_settings[kpi_settings['Section'] == section]
@@ -101,5 +104,6 @@ st.error("Status: RED (High Risk)")
 
 st.subheader("Detailed Results")
 st.write(pd.DataFrame(detailed_results))
+
 
 
