@@ -7,40 +7,38 @@ excel_file = "LNE CustomerHealthScoringModel.xlsx"
 # Load Input sheet raw (no assumption about headers yet)
 raw_df = pd.read_excel(excel_file, sheet_name="Input", header=None)
 
-# Try to detect header row (search for "Low Risk"), fallback to row 0
+# Try to detect header row (look for "Low Risk"), fallback to row 0
 header_rows = raw_df[raw_df.apply(lambda r: r.astype(str).str.contains("Low Risk").any(), axis=1)].index
 if len(header_rows) > 0:
     header_row = header_rows[0]
 else:
-    header_row = 0  # fallback if not found
+    header_row = 0
 
 # Re-load with proper headers
 df = pd.read_excel(excel_file, sheet_name="Input", header=header_row)
 
-# --- Debug: Show what we actually loaded ---
-st.write("DEBUG - Columns loaded:", df.columns.tolist())
-st.write("DEBUG - First 5 rows:", df.head())
-
-# --- Clean up columns ---
+# --- Clean up & rename columns ---
 df = df.loc[:, ~df.columns.duplicated()].copy()
 
-# Ensure first column is always "Metric"
-if df.columns[0] != "Metric":
-    df = df.rename(columns={df.columns[0]: "Metric"})
+df = df.rename(columns={
+    "KPIs": "Metric",
+    "Customer INPUT": "CustomerInput"
+})
 
-# Convert thresholds and weights to numeric (force, allow NaN)
+# Convert thresholds and weights to numeric
 for col in ["Low Risk", "Moderate Risk", "High Risk", "Weight"]:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# Ensure Section column exists and is forward-filled
+# Ensure Section column exists (based on blank threshold rows)
 if "Section" not in df.columns:
-    df["Section"] = df["Metric"].where(df.get("Low Risk").isna()).ffill()
+    df["Section"] = df["Metric"].where(df["Low Risk"].isna()).ffill()
 
-# Keep rows where Metric is not empty
+# Keep rows where Metric exists
 kpi_settings = df[df["Metric"].notna()]
 
-# --- Debug: Preview of KPI settings ---
+# --- Debug Preview ---
+st.write("DEBUG - Columns loaded:", df.columns.tolist())
 st.write("DEBUG - KPI Settings Preview", kpi_settings.head(20))
 
 # --- Streamlit App ---
@@ -56,9 +54,10 @@ with st.form("kpi_form"):
         section_df = kpi_settings[kpi_settings['Section'] == section]
         for _, row in section_df.iterrows():
             metric = row['Metric']
-            # Only show input if it's a KPI (skip section-only rows)
-            if pd.notna(row.get('Low Risk')) or pd.notna(row.get('Moderate Risk')) or pd.notna(row.get('High Risk')):
-                value = st.number_input(f"{metric}", min_value=0.0, step=0.1)
+            # Only show input if thresholds or weight exist
+            if pd.notna(row.get("Low Risk")) or pd.notna(row.get("Moderate Risk")) or pd.notna(row.get("High Risk")):
+                default_val = float(row.get("CustomerInput", 0) or 0)
+                value = st.number_input(f"{metric}", min_value=0.0, step=0.1, value=default_val)
                 user_inputs[metric] = value
         st.markdown("---")
     submitted = st.form_submit_button("Calculate Score")
