@@ -4,8 +4,14 @@ import pandas as pd
 # --- Load Weights and Thresholds from Excel ---
 excel_file = "LNE CustomerHealthScoringModel.xlsx"
 
-# Load Input sheet (adjust if your sheet name differs)
+# Load Input sheet
 df = pd.read_excel(excel_file, sheet_name="Input")
+
+# Debug: show column names from Excel
+st.write("Columns found in Input sheet:", df.columns.tolist())
+
+# For now, just use the whole dataframe until we align names
+kpi_settings = df
 
 # Expecting columns: Section, Metric, Low Risk, Moderate Risk, High Risk, Weight
 kpi_settings = df[['Section', 'Metric', 'Low Risk', 'Moderate Risk', 'High Risk', 'Weight']]
@@ -102,3 +108,4 @@ if submitted:
 
     st.subheader("Detailed Results")
     st.write(pd.DataFrame(detailed_results))
+
