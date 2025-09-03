@@ -35,6 +35,10 @@ df['Section'] = df['Section'].ffill()
 # Keep only rows with thresholds + weights (actual KPIs)
 kpi_settings = df.dropna(subset=["Low Risk", "Moderate Risk", "High Risk", "Weight"])
 
+# Convert thresholds and weights to numeric
+for col in ["Low Risk", "Moderate Risk", "High Risk", "Weight"]:
+    kpi_settings[col] = pd.to_numeric(kpi_settings[col], errors="coerce")
+    
 # --- Streamlit App ---
 st.title("Customer Lifecycle Management Health Score")
 st.markdown("Enter your actual KPI metrics below to calculate section scores and the final weighted health score.")
@@ -126,3 +130,4 @@ if submitted:
 
     st.subheader("Detailed Results")
     st.write(pd.DataFrame(detailed_results))
+
