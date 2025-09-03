@@ -13,28 +13,24 @@ header_row = raw_df[raw_df.apply(lambda r: r.astype(str).str.contains("Low Risk"
 # Re-load with proper headers
 df = pd.read_excel(excel_file, sheet_name="Input", header=header_row)
 
-# Drop duplicate columns, keep the first occurrence
+# --- Clean up columns ---
+# Drop duplicate columns
 df = df.loc[:, ~df.columns.duplicated()].copy()
 
-# Rename the first 5 useful columns
-df = df.rename(columns={
-    df.columns[0]: "Metric",
-    df.columns[1]: "Low Risk",
-    df.columns[2]: "Moderate Risk",
-    df.columns[3]: "High Risk",
-    df.columns[4]: "Weight"
-})
+# Keep only important ones
+keep_cols = ["Metric", "Low Risk", "Moderate Risk", "High Risk", "Weight"]
+if "Section" in df.columns:
+    keep_cols.append("Section")
 
-# --- Create Section column ---
-# Section = Metric name when thresholds are blank, forward-fill otherwise
-df['Section'] = df.apply(
-    lambda row: row['Metric'] if pd.isna(row["Low Risk"]) else None, axis=1
-)
-df['Section'] = df['Section'].ffill()
+df = df[keep_cols]
 
-# Keep only rows with thresholds + weights (actual KPIs)
-kpi_settings = df.dropna(subset=["Low Risk", "Moderate Risk", "High Risk", "Weight"])
+# Convert thresholds and weights to numeric
+numeric_cols = [c for c in ["Low Risk", "Moderate Risk", "High Risk", "Weight"] if c in df.columns]
+df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
 
-# --- Debug Info ---
-st.write("DEBUG - Available KPI columns:", kpi_settings.columns.tolist())
-s
+# Ensure Section column exists and is forward-filled
+if "Section" not in df.columns:
+    df["Section"] = df["Metric"].where(df["Low Risk"].isna()).ffill()
+
+# Keep only rows with valid thresholds + weights
+kpi_settings = df.dropna(subset=["Low Risk", "Moderate Risk", "Hig]()_
