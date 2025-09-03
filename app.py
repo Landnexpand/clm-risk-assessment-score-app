@@ -1,103 +1,92 @@
 import streamlit as st
 import pandas as pd
 
-# --- Load Weights and Thresholds from Excel ---
+# --- Load Excel ---
 excel_file = "LNE CustomerHealthScoringModel.xlsx"
-
-# Load Input sheet (adjust if your sheet name differs)
 df = pd.read_excel(excel_file, sheet_name="Input")
 
-# Expecting columns: Section, Metric, Low Risk, Moderate Risk, High Risk, Weight
-kpi_settings = df[['Section', 'Metric', 'Low Risk', 'Moderate Risk', 'High Risk', 'Weight']]
+# Ensure required columns exist
+required_cols = ["KPIs", "Low Risk", "Moderate Risk", "High Risk", "Weight", "Max CLM Score", "Section"]
+missing = [c for c in required_cols if c not in df.columns]
+if missing:
+    st.error(f"Missing required columns in Excel: {missing}")
+    st.stop()
 
-# --- Streamlit App ---
+df = df[required_cols]
+
+# --- UI Header ---
 st.title("Customer Lifecycle Management Health Score")
-st.markdown("Enter your actual KPI metrics below to calculate section scores and the final weighted health score.")
+st.markdown("Compare your KPIs against thresholds and enter your actual values to calculate scores.")
 
 user_inputs = {}
+results = []
 
-# Group inputs by section
-with st.form("kpi_form"):
-for section in kpi_settings['Section'].unique():
-st.subheader(section)
-section_df = kpi_settings[kpi_settings['Section'] == section]
-for _, row in section_df.iterrows():
-metric = row['Metric']
-value = st.number_input(f"{metric}", min_value=0.0, step=0.1)
-user_inputs[metric] = value
-submitted = st.form_submit_button("Calculate Score")
+# --- Input + Scoring Loop ---
+for i, row in df.iterrows():
+    kpi = row["KPIs"]
+    low, med, high = row["Low Risk"], row["Moderate Risk"], row["High Risk"]
+    weight = row["Weight"]
+    max_score = row["Max CLM Score"]
+    section = row["Section"]
 
-if submitted:
-section_results = {}
-total_score = 0
-total_weight = 0
-detailed_results = []
+    # Layout: KPI | Low | Med | High | Input
+    cols = st.columns([3, 2, 2, 2, 2])
+    cols[0].write(kpi)
+    cols[1].write(low if pd.notna(low) else "")
+    cols[2].write(med if pd.notna(med) else "")
+    cols[3].write(high if pd.notna(high) else "")
 
-# Calculate section scores
-for section in kpi_settings['Section'].unique():
-section_df = kpi_settings[kpi_settings['Section'] == section]
-section_score = 0
-section_weight = 0
+    # Input field
+    val = cols[4].number_input(
+        f"Input_{i}", 
+        min_value=0.0, 
+        step=0.1, 
+        value=0.0, 
+        label_visibility="collapsed"
+    )
+    user_inputs[kpi] = val
 
-for _, row in section_df.iterrows():
-metric = row['Metric']
-low = row['Low Risk']
-med = row['Moderate Risk']
-high = row['High Risk']
-weight = row['Weight']
-value = user_inputs[metric]
+    # ---- Scoring Algorithm ----
+    if pd.notna(low) and val >= low:
+        clm_score = 3
+    elif pd.notna(med) and val >= med:
+        clm_score = 2
+    else:
+        clm_score = 1
 
-# Risk scoring logic (adjust if your thresholds are defined differently)
-if value >= low:
-score = 3
-level = "Low Risk"
-elif value >= med:
-score = 2
-level = "Moderate Risk"
-else:
-score = 1
-level = "High Risk"
+    customer_score = clm_score * weight if pd.notna(weight) else clm_score
 
-weighted_score = score * weight
-total_score += weighted_score
-total_weight += weight
+    results.append({
+        "Section": section,
+        "KPI": kpi,
+        "Input": val,
+        "CLM Score": clm_score,
+        "Weight": weight,
+        "Customer CLM Score": customer_score,
+        "Max CLM Score": max_score
+    })
 
-section_score += weighted_score
-section_weight += weight
+# --- Convert to DataFrame ---
+res_df = pd.DataFrame(results)
 
-detailed_results.append({
-"Section": section,
-"Metric": metric,
-"Value": value,
-"Risk Level": level,
-"Score": score,
-"Weight": weight,
-"Weighted Score": weighted_score
+# --- Section Aggregation ---
+section_summary = res_df.groupby("Section").agg({
+    "Customer CLM Score": "sum",
+    "Max CLM Score": "sum"
 })
+section_summary["CLM % Score"] = section_summary["Customer CLM Score"] / section_summary["Max CLM Score"]
 
-# Section average
-if section_weight > 0:
-section_results[section] = section_score / section_weight
-else:
-section_results[section] = 0
-
-# Final score
-final_score = total_score / total_weight if total_weight > 0 else 0
+# --- Overall Score ---
+total_customer = section_summary["Customer CLM Score"].sum()
+total_max = section_summary["Max CLM Score"].sum()
+overall_pct = total_customer / total_max if total_max > 0 else 0
 
 # --- Display Results ---
-st.subheader("Section Scores")
-for section, score in section_results.items():
-st.metric(section, f"{score:.2f}")
+st.subheader("Detailed KPI Results")
+st.dataframe(res_df, use_container_width=True)
 
-st.subheader("Final Customer Health Score")
-st.metric("Overall Score", f"{final_score:.2f}")
+st.subheader("Section Summary")
+st.dataframe(section_summary, use_container_width=True)
 
-if final_score >= 2.5:
-st.success("Status: GREEN (Healthy)")
-elif final_score >= 1.75:
-st.warning("Status: YELLOW (At Risk)")
-else:
-st.error("Status: RED (High Risk)")
-
-st.subheader("Detailed Results")
-st.write(pd.DataFrame(detailed_results))
+st.subheader("Overall Health Score")
+st.metric("Final CLM % Score", f"{overall_pct:.2%}")
