@@ -4,11 +4,28 @@ import pandas as pd
 # --- Load Weights and Thresholds from Excel ---
 excel_file = "LNE CustomerHealthScoringModel.xlsx"
 
-# Load Input sheet without assuming headers
-df = pd.read_excel(excel_file, sheet_name="Input", header=None)
+# Load CSV/Excel raw (no headers)
+df = pd.read_csv("2025-09-03T03-41_export.csv", header=3)  # row 3 = real headers
 
-# Debug: show first few rows
-st.write("Preview of Input sheet:", df.head(20))
+# Rename relevant columns
+df = df.rename(columns={
+    df.columns[0]: "Metric",
+    df.columns[2]: "Low Risk",
+    df.columns[3]: "Moderate Risk",
+    df.columns[4]: "High Risk",
+    df.columns[7]: "Weight"
+})
+
+# Forward-fill Section names (rows like "Pipeline Health" mark new sections)
+df['Section'] = df['Metric']
+df['Section'] = df['Section'].where(df['Low Risk'].notna(), None)  # keep only rows with thresholds as metrics
+df['Section'] = df['Section'].ffill()
+
+# Keep only rows with actual metrics (where Low/Moderate/High exist)
+kpi_settings = df.dropna(subset=["Low Risk", "Moderate Risk", "High Risk", "Weight"])
+
+# Debug preview
+st.write("Processed KPI Settings:", kpi_settings.head(20))
 
 # For now, just use the whole dataframe until we align names
 kpi_settings = df
@@ -108,5 +125,6 @@ if submitted:
 
     st.subheader("Detailed Results")
     st.write(pd.DataFrame(detailed_results))
+
 
 
