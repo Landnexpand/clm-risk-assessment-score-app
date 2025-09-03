@@ -18,14 +18,14 @@ user_inputs = {}
 
 # Group inputs by section
 with st.form("kpi_form"):
-for section in kpi_settings['Section'].unique():
-st.subheader(section)
-section_df = kpi_settings[kpi_settings['Section'] == section]
-for _, row in section_df.iterrows():
-metric = row['Metric']
-value = st.number_input(f"{metric}", min_value=0.0, step=0.1)
-user_inputs[metric] = value
-submitted = st.form_submit_button("Calculate Score")
+    for section in kpi_settings['Section'].unique():
+        st.subheader(section)
+        section_df = kpi_settings[kpi_settings['Section'] == section]
+        for _, row in section_df.iterrows():
+            metric = row['Metric']
+            value = st.number_input(f"{metric}", min_value=0.0, step=0.1)
+            user_inputs[metric] = value
+    submitted = st.form_submit_button("Calculate Score")
 
 if submitted:
 section_results = {}
@@ -101,3 +101,4 @@ st.error("Status: RED (High Risk)")
 
 st.subheader("Detailed Results")
 st.write(pd.DataFrame(detailed_results))
+
