@@ -57,4 +57,4 @@ if submitted:
     for section in kpi_settings['Section'].unique():
         section_df = kpi_settings[kpi_settings['Section'] == section]
         section_score = 0
-        section_weight = 0_
+        section_weight = 0
