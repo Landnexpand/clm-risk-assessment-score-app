@@ -1,141 +1,92 @@
 import streamlit as st
 import pandas as pd
 
-# --- Load Excel Config ---
+# --- Load Excel ---
 excel_file = "LNE CustomerHealthScoringModel.xlsx"
+df = pd.read_excel(excel_file, sheet_name="Input")
 
-# Load Input sheet raw (no assumption about headers yet)
-raw_df = pd.read_excel(excel_file, sheet_name="Input", header=None)
+# Ensure required columns exist
+required_cols = ["KPIs", "Low Risk", "Moderate Risk", "High Risk", "Weight", "Max CLM Score", "Section"]
+missing = [c for c in required_cols if c not in df.columns]
+if missing:
+    st.error(f"Missing required columns in Excel: {missing}")
+    st.stop()
 
-# Try to detect header row (search for "Metric"), fallback to row 0
-header_rows = raw_df[raw_df.apply(lambda r: r.astype(str).str.contains("Metric").any(), axis=1)].index
-if len(header_rows) > 0:
-    header_row = header_rows[0]
-else:
-    header_row = 0
+df = df[required_cols]
 
-# Re-load with proper headers
-df = pd.read_excel(excel_file, sheet_name="Input", header=header_row)
-
-# --- Clean & Align Columns ---
-# Rename based on your CSV structure
-df = df.rename(columns={
-    df.columns[1]: "Metric",
-    df.columns[2]: "Low Risk",
-    df.columns[3]: "Moderate Risk",
-    df.columns[4]: "High Risk",
-    df.columns[5]: "CustomerInput",
-    df.columns[6]: "Weight"
-})
-
-# Convert numeric fields
-for col in ["Low Risk", "Moderate Risk", "High Risk", "CustomerInput", "Weight"]:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-# Create Section column: rows with Weight but no CustomerInput are headers
-df["Section"] = df["Metric"].where(df["Weight"].notna() & df["CustomerInput"].isna()).ffill()
-
-# KPI rows = rows with a Metric and Weight
-kpi_settings = df[df["Metric"].notna() & df["Weight"].notna()]
-
-# --- Debug Preview ---
-st.write("DEBUG - Columns loaded:", df.columns.tolist())
-st.write("DEBUG - KPI Settings Preview", kpi_settings.head(20))
-
-# --- Streamlit App ---
+# --- UI Header ---
 st.title("Customer Lifecycle Management Health Score")
-st.markdown("Enter your actual KPI metrics below to calculate section scores and the final weighted health score.")
+st.markdown("Compare your KPIs against thresholds and enter your actual values to calculate scores.")
 
 user_inputs = {}
+results = []
 
-# KPI Input Form
-with st.form("kpi_form"):
-    for section in kpi_settings["Section"].unique():
-        st.subheader(section)
-        section_df = kpi_settings[kpi_settings["Section"] == section]
-        for _, row in section_df.iterrows():
-            metric = row["Metric"]
-            default_val = float(row["CustomerInput"]) if pd.notna(row["CustomerInput"]) else 0.0
-            value = st.number_input(f"{metric}", min_value=0.0, step=0.1, value=default_val)
-            user_inputs[metric] = value
-        st.markdown("---")
-    submitted = st.form_submit_button("Calculate Score")
+# --- Input + Scoring Loop ---
+for i, row in df.iterrows():
+    kpi = row["KPIs"]
+    low, med, high = row["Low Risk"], row["Moderate Risk"], row["High Risk"]
+    weight = row["Weight"]
+    max_score = row["Max CLM Score"]
+    section = row["Section"]
 
-# --- Process Results ---
-if submitted:
-    section_results = {}
-    total_score = 0
-    total_weight = 0
-    detailed_results = []
+    # Layout: KPI | Low | Med | High | Input
+    cols = st.columns([3, 2, 2, 2, 2])
+    cols[0].write(kpi)
+    cols[1].write(low if pd.notna(low) else "")
+    cols[2].write(med if pd.notna(med) else "")
+    cols[3].write(high if pd.notna(high) else "")
 
-    for section in kpi_settings["Section"].unique():
-        section_df = kpi_settings[kpi_settings["Section"] == section]
-        section_score = 0
-        section_weight = 0
+    # Input field
+    val = cols[4].number_input(
+        f"Input_{i}", 
+        min_value=0.0, 
+        step=0.1, 
+        value=0.0, 
+        label_visibility="collapsed"
+    )
+    user_inputs[kpi] = val
 
-        for _, row in section_df.iterrows():
-            metric = row["Metric"]
-            if metric not in user_inputs:
-                continue
-
-            low = row.get("Low Risk")
-            med = row.get("Moderate Risk")
-            high = row.get("High Risk")
-            weight = row.get("Weight")
-            value = user_inputs[metric]
-
-            # Risk scoring logic
-            if pd.notna(low) and value >= low:
-                score = 3
-                level = "Low Risk"
-            elif pd.notna(med) and value >= med:
-                score = 2
-                level = "Moderate Risk"
-            else:
-                score = 1
-                level = "High Risk"
-
-            weighted_score = score * weight if pd.notna(weight) else score
-            total_score += weighted_score
-            total_weight += weight if pd.notna(weight) else 1
-
-            section_score += weighted_score
-            section_weight += weight if pd.notna(weight) else 1
-
-            detailed_results.append({
-                "Section": section,
-                "Metric": metric,
-                "Value": value,
-                "Risk Level": level,
-                "Score": score,
-                "Weight": weight,
-                "Weighted Score": weighted_score
-            })
-
-        # Section average
-        if section_weight > 0:
-            section_results[section] = section_score / section_weight
-        else:
-            section_results[section] = 0
-
-    # Final score
-    final_score = total_score / total_weight if total_weight > 0 else 0
-
-    # --- Display Results ---
-    st.subheader("Section Scores")
-    for section, score in section_results.items():
-        st.metric(section, f"{score:.2f}")
-
-    st.subheader("Final Customer Health Score")
-    st.metric("Overall Score", f"{final_score:.2f}")
-
-    if final_score >= 2.5:
-        st.success("Status: GREEN (Healthy)")
-    elif final_score >= 1.75:
-        st.warning("Status: YELLOW (At Risk)")
+    # ---- Scoring Algorithm ----
+    if pd.notna(low) and val >= low:
+        clm_score = 3
+    elif pd.notna(med) and val >= med:
+        clm_score = 2
     else:
-        st.error("Status: RED (High Risk)")
+        clm_score = 1
 
-    st.subheader("Detailed Results")
-    st.write(pd.DataFrame(detailed_results))
+    customer_score = clm_score * weight if pd.notna(weight) else clm_score
+
+    results.append({
+        "Section": section,
+        "KPI": kpi,
+        "Input": val,
+        "CLM Score": clm_score,
+        "Weight": weight,
+        "Customer CLM Score": customer_score,
+        "Max CLM Score": max_score
+    })
+
+# --- Convert to DataFrame ---
+res_df = pd.DataFrame(results)
+
+# --- Section Aggregation ---
+section_summary = res_df.groupby("Section").agg({
+    "Customer CLM Score": "sum",
+    "Max CLM Score": "sum"
+})
+section_summary["CLM % Score"] = section_summary["Customer CLM Score"] / section_summary["Max CLM Score"]
+
+# --- Overall Score ---
+total_customer = section_summary["Customer CLM Score"].sum()
+total_max = section_summary["Max CLM Score"].sum()
+overall_pct = total_customer / total_max if total_max > 0 else 0
+
+# --- Display Results ---
+st.subheader("Detailed KPI Results")
+st.dataframe(res_df, use_container_width=True)
+
+st.subheader("Section Summary")
+st.dataframe(section_summary, use_container_width=True)
+
+st.subheader("Overall Health Score")
+st.metric("Final CLM % Score", f"{overall_pct:.2%}")
