@@ -23,9 +23,14 @@ df = df.rename(columns={
 })
 
 # Add Section column by forward-filling metrics that look like section headers
-df['Section'] = df['Metric']
-df['Section'] = df['Section'].where(df['Low Risk'].notna(), None)  # blank thresholds = section name
+# Create Section column: when thresholds are blank, treat Metric as a section header
+df['Section'] = df.apply(
+    lambda row: row['Metric'] if pd.isna(row['Low Risk']) else None, axis=1
+)
+
+# Forward-fill section names downwards
 df['Section'] = df['Section'].ffill()
+
 
 # Keep only rows that have thresholds + weight (i.e., actual KPIs)
 kpi_settings = df.dropna(subset=["Low Risk", "Moderate Risk", "High Risk", "Weight"])
@@ -58,3 +63,4 @@ if submitted:
         section_df = kpi_settings[kpi_settings['Section'] == section]
         section_score = 0
         section_weight = 0
+
