@@ -5,14 +5,16 @@ import pandas as pd
 excel_file = "LNE CustomerHealthScoringModel v2.xlsx"
 df = pd.read_excel(excel_file, sheet_name="Input")
 
-# Ensure required columns exist
-required_cols = ["KPIs", "Low Risk", "Moderate Risk", "High Risk", "Weight", "Max CLM Score", "Section"]
-missing = [c for c in required_cols if c not in df.columns]
-if missing:
-    st.error(f"Missing required columns in Excel: {missing}")
-    st.stop()
+# --- Clean column names just in case ---
+df.columns = df.columns.str.strip()
 
-df = df[required_cols]
+# --- Build Section column dynamically ---
+def is_section_row(row):
+    no_thresholds = pd.isna(row["Low Risk"]) and pd.isna(row["Moderate Risk"]) and pd.isna(row["High Risk"])
+    no_weight = pd.isna(row["Weight"])
+    return pd.notna(row["KPIs"]) and no_thresholds and no_weight
+
+df["Section"] = df.apply(lambda r: r["KPIs"] if is_section_row(r) else None, axis=1).ffill()
 
 # --- UI Header ---
 st.title("Customer Lifecycle Management Health Score")
@@ -28,6 +30,10 @@ for i, row in df.iterrows():
     weight = row["Weight"]
     max_score = row["Max CLM Score"]
     section = row["Section"]
+
+    # Skip pure section rows (no thresholds/weights)
+    if is_section_row(row):
+        continue
 
     # Layout: KPI | Low | Med | High | Input
     cols = st.columns([3, 2, 2, 2, 2])
@@ -90,4 +96,3 @@ st.dataframe(section_summary, use_container_width=True)
 
 st.subheader("Overall Health Score")
 st.metric("Final CLM % Score", f"{overall_pct:.2%}")
-
