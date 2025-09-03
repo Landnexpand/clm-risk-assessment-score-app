@@ -17,10 +17,14 @@ df = pd.read_excel(excel_file, sheet_name="Input", header=header_row)
 # Drop duplicate columns
 df = df.loc[:, ~df.columns.duplicated()].copy()
 
-# Define the important columns
+# Ensure first column is always "Metric"
+if df.columns[0] != "Metric":
+    df = df.rename(columns={df.columns[0]: "Metric"})
+
+# Define important columns
 keep_cols = ["Metric", "Low Risk", "Moderate Risk", "High Risk", "Weight", "Section"]
 
-# Keep only columns that actually exist in the DataFrame
+# Keep only columns that actually exist
 df = df[[c for c in keep_cols if c in df.columns]]
 
 # Convert thresholds and weights to numeric
@@ -29,7 +33,7 @@ df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
 
 # Ensure Section column exists and is forward-filled
 if "Section" not in df.columns:
-    df["Section"] = df["Metric"].where(df["Low Risk"].isna()).ffill()
+    df["Section"] = df["Metric"].where(df.get("Low Risk").isna()).ffill()
 
 # Keep only rows with valid thresholds + weights
 kpi_settings = df.dropna(subset=[c for c in ["Low Risk", "Moderate Risk", "High Risk", "Weight"] if c in df.columns])
