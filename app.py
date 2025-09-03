@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 # --- Load Excel ---
-excel_file = "LNE CustomerHealthScoringModel.xlsx"
+excel_file = "LNE CustomerHealthScoringModel v2.xlsx"
 df = pd.read_excel(excel_file, sheet_name="Input")
 
 # Ensure required columns exist
@@ -90,3 +90,4 @@ st.dataframe(section_summary, use_container_width=True)
 
 st.subheader("Overall Health Score")
 st.metric("Final CLM % Score", f"{overall_pct:.2%}")
+
