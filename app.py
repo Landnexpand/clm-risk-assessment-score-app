@@ -4,7 +4,7 @@ import pandas as pd
 # --- Load Excel Config ---
 excel_file = "LNE CustomerHealthScoringModel.xlsx"
 
-# Load Input sheet, but don't assume headers are row 0
+# Load Input sheet raw (no assumption about headers yet)
 raw_df = pd.read_excel(excel_file, sheet_name="Input", header=None)
 
 # Find the row that contains the true headers (look for 'Low Risk')
@@ -13,29 +13,26 @@ header_row = raw_df[raw_df.apply(lambda r: r.astype(str).str.contains("Low Risk"
 # Re-load with proper headers
 df = pd.read_excel(excel_file, sheet_name="Input", header=header_row)
 
-# Rename relevant columns (adjust to match your Excel exactly)
+# Drop duplicate columns, keep the first occurrence
+df = df.loc[:, ~df.columns.duplicated()].copy()
+
+# Rename the first 5 useful columns
 df = df.rename(columns={
     df.columns[0]: "Metric",
-    df.columns[2]: "Low Risk",
-    df.columns[3]: "Moderate Risk",
-    df.columns[4]: "High Risk",
-    df.columns[7]: "Weight"
+    df.columns[1]: "Low Risk",
+    df.columns[2]: "Moderate Risk",
+    df.columns[3]: "High Risk",
+    df.columns[4]: "Weight"
 })
-# --- Debug Step: Show column names and sample data ---
-st.write("DEBUG - Columns after rename:", df.columns.tolist())
-st.write("DEBUG - Sample data:", df.head(15))
 
-# --- Create Section column safely ---
-if "Low Risk" in df.columns:
-    df['Section'] = df.apply(
-        lambda row: row['Metric'] if pd.isna(row["Low Risk"]) else None, axis=1
-    )
-    df['Section'] = df['Section'].ffill()
-else:
-    st.error("⚠️ 'Low Risk' column not found — please check Excel headers.")
+# --- Create Section column ---
+# Section = Metric name when thresholds are blank, forward-fill otherwise
+df['Section'] = df.apply(
+    lambda row: row['Metric'] if pd.isna(row["Low Risk"]) else None, axis=1
+)
+df['Section'] = df['Section'].ffill()
 
-
-# Keep only rows that have thresholds + weight (i.e., actual KPIs)
+# Keep only rows with thresholds + weights (actual KPIs)
 kpi_settings = df.dropna(subset=["Low Risk", "Moderate Risk", "High Risk", "Weight"])
 
 # --- Streamlit App ---
@@ -67,4 +64,65 @@ if submitted:
         section_score = 0
         section_weight = 0
 
+        for _, row in section_df.iterrows():
+            metric = row['Metric']
+            low = row['Low Risk']
+            med = row['Moderate Risk']
+            high = row['High Risk']
+            weight = row['Weight']
+            value = user_inputs[metric]
 
+            # Risk scoring logic
+            if value >= low:
+                score = 3
+                level = "Low Risk"
+            elif value >= med:
+                score = 2
+                level = "Moderate Risk"
+            else:
+                score = 1
+                level = "High Risk"
+
+            weighted_score = score * weight
+            total_score += weighted_score
+            total_weight += weight
+
+            section_score += weighted_score
+            section_weight += weight
+
+            detailed_results.append({
+                "Section": section,
+                "Metric": metric,
+                "Value": value,
+                "Risk Level": level,
+                "Score": score,
+                "Weight": weight,
+                "Weighted Score": weighted_score
+            })
+
+        # Section average
+        if section_weight > 0:
+            section_results[section] = section_score / section_weight
+        else:
+            section_results[section] = 0
+
+    # Final score
+    final_score = total_score / total_weight if total_weight > 0 else 0
+
+    # --- Display Results ---
+    st.subheader("Section Scores")
+    for section, score in section_results.items():
+        st.metric(section, f"{score:.2f}")
+
+    st.subheader("Final Customer Health Score")
+    st.metric("Overall Score", f"{final_score:.2f}")
+
+    if final_score >= 2.5:
+        st.success("Status: GREEN (Healthy)")
+    elif final_score >= 1.75:
+        st.warning("Status: YELLOW (At Risk)")
+    else:
+        st.error("Status: RED (High Risk)")
+
+    st.subheader("Detailed Results")
+    st.write(pd.DataFrame(detailed_results))
