@@ -16,9 +16,6 @@ st.markdown("Enter your actual KPI metrics below to calculate section scores and
 
 user_inputs = {}
 
-# Debug: show what columns are in the Input sheet
-st.write("Columns in Input sheet:", kpi_settings.columns.tolist())
-
 # Group inputs by section
 with st.form("kpi_form"):
     for section in kpi_settings['Section'].unique():
@@ -30,80 +27,78 @@ with st.form("kpi_form"):
             user_inputs[metric] = value
     submitted = st.form_submit_button("Calculate Score")
 
+# --- Process Results ---
 if submitted:
-section_results = {}
-total_score = 0
-total_weight = 0
-detailed_results = []
+    section_results = {}
+    total_score = 0
+    total_weight = 0
+    detailed_results = []
 
-# Calculate section scores
-for section in kpi_settings['Section'].unique():
-section_df = kpi_settings[kpi_settings['Section'] == section]
-section_score = 0
-section_weight = 0
+    # Calculate section scores
+    for section in kpi_settings['Section'].unique():
+        section_df = kpi_settings[kpi_settings['Section'] == section]
+        section_score = 0
+        section_weight = 0
 
-for _, row in section_df.iterrows():
-metric = row['Metric']
-low = row['Low Risk']
-med = row['Moderate Risk']
-high = row['High Risk']
-weight = row['Weight']
-value = user_inputs[metric]
+        for _, row in section_df.iterrows():
+            metric = row['Metric']
+            low = row['Low Risk']
+            med = row['Moderate Risk']
+            high = row['High Risk']
+            weight = row['Weight']
+            value = user_inputs[metric]
 
-# Risk scoring logic (adjust if your thresholds are defined differently)
-if value >= low:
-score = 3
-level = "Low Risk"
-elif value >= med:
-score = 2
-level = "Moderate Risk"
-else:
-score = 1
-level = "High Risk"
+            # Risk scoring logic
+            if value >= low:
+                score = 3
+                level = "Low Risk"
+            elif value >= med:
+                score = 2
+                level = "Moderate Risk"
+            else:
+                score = 1
+                level = "High Risk"
 
-weighted_score = score * weight
-total_score += weighted_score
-total_weight += weight
+            weighted_score = score * weight
+            total_score += weighted_score
+            total_weight += weight
 
-section_score += weighted_score
-section_weight += weight
+            section_score += weighted_score
+            section_weight += weight
 
-detailed_results.append({
-"Section": section,
-"Metric": metric,
-"Value": value,
-"Risk Level": level,
-"Score": score,
-"Weight": weight,
-"Weighted Score": weighted_score
-})
+            detailed_results.append({
+                "Section": section,
+                "Metric": metric,
+                "Value": value,
+                "Risk Level": level,
+                "Score": score,
+                "Weight": weight,
+                "Weighted Score": weighted_score
+            })
 
-# Section average
-if section_weight > 0:
-section_results[section] = section_score / section_weight
-else:
-section_results[section] = 0
+        # Section average
+        if section_weight > 0:
+            section_results[section] = section_score / section_weight
+        else:
+            section_results[section] = 0
 
-# Final score
-final_score = total_score / total_weight if total_weight > 0 else 0
+    # Final score
+    final_score = total_score / total_weight if total_weight > 0 else 0
 
-# --- Display Results ---
-st.subheader("Section Scores")
-for section, score in section_results.items():
-st.metric(section, f"{score:.2f}")
+    # --- Display Results ---
+    st.subheader("Section Scores")
+    for section, score in section_results.items():
+        st.metric(section, f"{score:.2f}")
 
-st.subheader("Final Customer Health Score")
-st.metric("Overall Score", f"{final_score:.2f}")
+    st.subheader("Final Customer Health Score")
+    st.metric("Overall Score", f"{final_score:.2f}")
 
-if final_score >= 2.5:
-st.success("Status: GREEN (Healthy)")
-elif final_score >= 1.75:
-st.warning("Status: YELLOW (At Risk)")
-else:
-st.error("Status: RED (High Risk)")
+    if final_score >= 2.5:
+        st.success("Status: GREEN (Healthy)")
+    elif final_score >= 1.75:
+        st.warning("Status: YELLOW (At Risk)")
+    else:
+        st.error("Status: RED (High Risk)")
 
-st.subheader("Detailed Results")
-st.write(pd.DataFrame(detailed_results))
-
-
-
+    st.subheader("Detailed Results")
+    st.write(pd.DataFrame(detailed_results))
