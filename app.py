@@ -21,15 +21,18 @@ df = df.rename(columns={
     df.columns[4]: "High Risk",
     df.columns[7]: "Weight"
 })
+# --- Debug Step: Show column names and sample data ---
+st.write("DEBUG - Columns after rename:", df.columns.tolist())
+st.write("DEBUG - Sample data:", df.head(15))
 
-# Add Section column by forward-filling metrics that look like section headers
-# Create Section column: when thresholds are blank, treat Metric as a section header
-df['Section'] = df.apply(
-    lambda row: row['Metric'] if pd.isna(row['Low Risk']) else None, axis=1
-)
-
-# Forward-fill section names downwards
-df['Section'] = df['Section'].ffill()
+# --- Create Section column safely ---
+if "Low Risk" in df.columns:
+    df['Section'] = df.apply(
+        lambda row: row['Metric'] if pd.isna(row["Low Risk"]) else None, axis=1
+    )
+    df['Section'] = df['Section'].ffill()
+else:
+    st.error("⚠️ 'Low Risk' column not found — please check Excel headers.")
 
 
 # Keep only rows that have thresholds + weight (i.e., actual KPIs)
@@ -63,4 +66,5 @@ if submitted:
         section_df = kpi_settings[kpi_settings['Section'] == section]
         section_score = 0
         section_weight = 0
+
 
