@@ -5,14 +5,25 @@ import pandas as pd
 excel_file = "LNE CustomerHealthScoringModel v2.xlsx"
 df = pd.read_excel(excel_file, sheet_name="Input")
 
-# --- Clean column names just in case ---
-df.columns = df.columns.str.strip()
+# --- Clean & normalize column headers ---
+df.columns = df.columns.str.strip().str.lower()
+
+rename_map = {
+    "kpis": "KPIs",
+    "low risk": "Low Risk",
+    "moderate risk": "Moderate Risk",
+    "high risk": "High Risk",
+    "weight": "Weight",
+    "max clm score": "Max CLM Score",   # normalize variations
+    "section": "Section"
+}
+df = df.rename(columns=rename_map)
 
 # --- Build Section column dynamically ---
 def is_section_row(row):
-    no_thresholds = pd.isna(row["Low Risk"]) and pd.isna(row["Moderate Risk"]) and pd.isna(row["High Risk"])
-    no_weight = pd.isna(row["Weight"])
-    return pd.notna(row["KPIs"]) and no_thresholds and no_weight
+    no_thresholds = pd.isna(row.get("Low Risk")) and pd.isna(row.get("Moderate Risk")) and pd.isna(row.get("High Risk"))
+    no_weight = pd.isna(row.get("Weight"))
+    return pd.notna(row.get("KPIs")) and no_thresholds and no_weight
 
 df["Section"] = df.apply(lambda r: r["KPIs"] if is_section_row(r) else None, axis=1).ffill()
 
@@ -26,12 +37,12 @@ results = []
 # --- Input + Scoring Loop ---
 for i, row in df.iterrows():
     kpi = row["KPIs"]
-    low, med, high = row["Low Risk"], row["Moderate Risk"], row["High Risk"]
-    weight = row["Weight"]
-    max_score = row["Max CLM Score"]
+    low, med, high = row.get("Low Risk"), row.get("Moderate Risk"), row.get("High Risk")
+    weight = row.get("Weight")
+    max_score = row.get("Max CLM Score")
     section = row["Section"]
 
-    # Skip pure section rows (no thresholds/weights)
+    # Skip pure section header rows
     if is_section_row(row):
         continue
 
@@ -44,10 +55,10 @@ for i, row in df.iterrows():
 
     # Input field
     val = cols[4].number_input(
-        f"Input_{i}", 
-        min_value=0.0, 
-        step=0.1, 
-        value=0.0, 
+        f"Input_{i}",
+        min_value=0.0,
+        step=0.1,
+        value=0.0,
         label_visibility="collapsed"
     )
     user_inputs[kpi] = val
